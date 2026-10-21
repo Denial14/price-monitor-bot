@@ -64,6 +64,14 @@ func (b *Bot) HandleUpdate(ctx context.Context, update tgbotapi.Update) {
 		b.HandleStart(ctx, update)
 	case "help":
 		b.HandleHelp(ctx, update)
+	case "add":
+		b.HandleUpdate(ctx, update)
+	case "remove":
+		b.HandleRemove(ctx, update)
+	case "list":
+		b.HandleList(ctx, update)
+	case "stat":
+		b.HandleStat(ctx, update)
 	default:
 		b.SendText(update.Message.Chat.ID, "Неизвестная команда. Попробуй /help")
 	}

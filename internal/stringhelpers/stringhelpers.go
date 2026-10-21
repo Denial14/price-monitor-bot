@@ -1,7 +1,9 @@
-package stringhelpers
+package helpers
 
 import (
+	"fmt"
 	"net/url"
+	"price-bot/internal/models"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -30,4 +32,15 @@ func ValidateTitle(title string) string {
 		return string(newTitle)
 	}
 	return title
+}
+
+func FormatItem(item models.Item) string {
+	title := item.Title
+	if title == "" {
+		title = item.URL
+	}
+	if len(title) > 50 {
+		title = title[:47] + "..."
+	}
+	return fmt.Sprintf("[%d] %s - %2.f", item.ID, title, item.TargetPrice)
 }

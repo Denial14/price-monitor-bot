@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"price-bot/internal/storage"
-	"price-bot/internal/stringhelpers"
+	stringhelpers "price-bot/internal/stringhelpers"
 	"strconv"
 	"strings"
 
@@ -35,6 +35,8 @@ func (b *Bot) HandleHelp(ctx context.Context, update tgbotapi.Update) {
 		/help - справка
 		/add - добавление товара
 		/remove - удаление товара
+		/list - показать список товаров
+		/stat - показать статистику
 	`
 	b.SendText(update.Message.Chat.ID, text)
 }
@@ -94,7 +96,7 @@ func (b *Bot) HandleAdd(ctx context.Context, update tgbotapi.Update) {
 	b.SendText(chatID, fmt.Sprintf("Добавлен элемент [%d] %s - %.2f", item.ID, item.URL, item.TargetPrice))
 }
 
-func (b *Bot) Remove(ctx context.Context, update tgbotapi.Update) {
+func (b *Bot) HandleRemove(ctx context.Context, update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	tgID := update.Message.From.ID
 
@@ -129,4 +131,64 @@ func (b *Bot) Remove(ctx context.Context, update tgbotapi.Update) {
 	}
 
 	b.SendText(chatID, fmt.Sprintf("Удален товар [%d]", id))
+}
+
+func (b *Bot) HandleList(ctx context.Context, update tgbotapi.Update) {
+	chatID := update.Message.Chat.ID
+	tgID := update.Message.From.ID
+
+	user, err := b.users.GetByTgID(ctx, tgID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			b.SendText(chatID, "Вы еще не зарегестрированы/ /add <url> <price> [title]")
+			return
+		}
+		log.Errorf("handle list tg_id=%d: %v", tgID, err)
+		b.SendText(chatID, "Ошибка. Попробуйте позже")
+		return
+	}
+
+	items, err := b.items.ListByUser(ctx, user.ID)
+	if err != nil {
+		log.Errorf("error")
+		b.SendText(chatID, "Ошибка получения списка товаров. Попробуйте позже")
+		return
+	}
+
+	if len(items) == 0 {
+		b.SendText(chatID, "У вас еще нету товаров. /add <url> <price> []title")
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString(fmt.Sprintf("Список ваших товаров [%d]:\n\n", len(items)))
+	for _, item := range items {
+		sb.WriteString(stringhelpers.FormatItem(item))
+		sb.WriteString("\n")
+	}
+
+	b.SendText(chatID, sb.String())
+}
+
+func (b *Bot) HandleStat(ctx context.Context, update tgbotapi.Update) {
+	chatID := update.Message.Chat.ID
+	tgID := update.Message.From.ID
+
+	user, err := b.users.GetByTgID(ctx, tgID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			b.SendText(chatID, "Вы еще не добавили товары. /add <url> <price> [title]")
+			return
+		}
+		log.Errorf("handle stat tg_id=%d: %v", tgID, err)
+		b.SendText(chatID, "Ошибка. Попробуйте позже")
+	}
+
+	count, err := b.items.CountByUser(ctx, user.ID)
+	if err != nil {
+		log.Errorf("count by user user_id=%d: %v", user.ID, err)
+		b.SendText(chatID, "Ошибка. Попробуйте позже")
+		return
+	}
+
+	b.SendText(chatID, fmt.Sprintf("Товаров: %d", count))
 }
