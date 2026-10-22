@@ -60,7 +60,7 @@ func (b *Bot) HandleAdd(ctx context.Context, update tgbotapi.Update) {
 
 	rawURL := parts[0]
 	rawPrice := parts[1]
-	title := strings.Join(parts[2:], "")
+	title := strings.Join(parts[2:], " ")
 
 	if stringhelpers.ValidateURL(rawURL) != nil {
 		b.SendText(chatID, "Неверный URL. Должно начинвться с http:// или https://")
@@ -88,7 +88,7 @@ func (b *Bot) HandleAdd(ctx context.Context, update tgbotapi.Update) {
 			b.SendText(chatID, "Данный URL уже существует. Введите другой")
 			return
 		}
-		log.Errorf("error add item user_id=%d url=%s: %err", tgID, rawURL, err)
+		log.Errorf("error add item user_id=%d url=%s: %v", user.ID, rawURL, err)
 		b.SendText(chatID, "Ошибка добавления. Попробуйте позже")
 		return
 	}
@@ -112,6 +112,11 @@ func (b *Bot) HandleRemove(ctx context.Context, update tgbotapi.Update) {
 	}
 
 	args := update.Message.CommandArguments()
+	if args == "" {
+		b.SendText(chatID, "Использование: /remove <id>")
+		return
+	}
+
 	idStr := strings.TrimSpace(strings.Fields(args)[0])
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
@@ -157,6 +162,7 @@ func (b *Bot) HandleList(ctx context.Context, update tgbotapi.Update) {
 
 	if len(items) == 0 {
 		b.SendText(chatID, "У вас еще нету товаров. /add <url> <price> []title")
+		return
 	}
 
 	sb := strings.Builder{}
@@ -181,6 +187,7 @@ func (b *Bot) HandleStat(ctx context.Context, update tgbotapi.Update) {
 		}
 		log.Errorf("handle stat tg_id=%d: %v", tgID, err)
 		b.SendText(chatID, "Ошибка. Попробуйте позже")
+		return
 	}
 
 	count, err := b.items.CountByUser(ctx, user.ID)

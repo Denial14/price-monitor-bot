@@ -10,9 +10,15 @@ import (
 )
 
 func ValidateURL(rawURL string) error {
-	url, err := url.Parse(rawURL)
-	if err != nil || (url.Scheme != "http" && url.Scheme != "https" || url.Host == "") {
-		return err
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("parse url: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme must be http or https, but got: %s", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("host is empty")
 	}
 	return nil
 }
@@ -20,8 +26,11 @@ func ValidateURL(rawURL string) error {
 func ValidatePrice(rawPrice string) (float64, error) {
 	replacePrice := strings.ReplaceAll(rawPrice, ",", ".")
 	price, err := strconv.ParseFloat(replacePrice, 64)
-	if err != nil || price <= 0 {
-		return 0, err
+	if err != nil {
+		return 0, fmt.Errorf("price must be a number, but got %q: %w", rawPrice, err)
+	}
+	if price <= 0 {
+		return 0, fmt.Errorf("price must be positive, but got: %v", price)
 	}
 	return price, nil
 }
@@ -39,8 +48,10 @@ func FormatItem(item models.Item) string {
 	if title == "" {
 		title = item.URL
 	}
-	if len(title) > 50 {
-		title = title[:47] + "..."
+
+	runes := []rune(title)
+	if len(runes) > 50 {
+		title = string(runes[:47]) + "..."
 	}
-	return fmt.Sprintf("[%d] %s - %2.f", item.ID, title, item.TargetPrice)
+	return fmt.Sprintf("[%d] %s - %.2f", item.ID, title, item.TargetPrice)
 }

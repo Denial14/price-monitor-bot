@@ -65,7 +65,7 @@ func (b *Bot) HandleUpdate(ctx context.Context, update tgbotapi.Update) {
 	case "help":
 		b.HandleHelp(ctx, update)
 	case "add":
-		b.HandleUpdate(ctx, update)
+		b.HandleAdd(ctx, update)
 	case "remove":
 		b.HandleRemove(ctx, update)
 	case "list":
