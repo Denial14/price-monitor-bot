@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	helpers "price-bot/internal/helpers"
 	"price-bot/internal/storage"
-	stringhelpers "price-bot/internal/stringhelpers"
 	"strconv"
 	"strings"
 
@@ -20,12 +20,11 @@ func (b *Bot) HandleStart(ctx context.Context, update tgbotapi.Update) {
 	user, err := b.users.EnsureUser(ctx, tgID, username)
 	if err != nil {
 		log.Errorf("ensure user: %v", err)
-		b.SendText(update.Message.Chat.ID, "Ошибка. Попробуте позже.")
+		b.SendText(update.Message.Chat.ID, "Ошибка. Попробуйте позже.")
 		return
 	}
 
 	b.SendText(update.Message.Chat.ID, fmt.Sprintf("Hello %s!", user.Username))
-	b.HandleHelp(ctx, update)
 }
 
 func (b *Bot) HandleHelp(ctx context.Context, update tgbotapi.Update) {
@@ -62,18 +61,18 @@ func (b *Bot) HandleAdd(ctx context.Context, update tgbotapi.Update) {
 	rawPrice := parts[1]
 	title := strings.Join(parts[2:], " ")
 
-	if stringhelpers.ValidateURL(rawURL) != nil {
-		b.SendText(chatID, "Неверный URL. Должно начинвться с http:// или https://")
+	if helpers.ValidateURL(rawURL) != nil {
+		b.SendText(chatID, "Неверный URL. Должно начинаться с http:// или https://")
 		return
 	}
 
-	price, err := stringhelpers.ValidatePrice(rawPrice)
+	price, err := helpers.ValidatePrice(rawPrice)
 	if err != nil {
 		b.SendText(chatID, "Неверный price. Price должен быть валидным и > 0")
 		return
 	}
 
-	title = stringhelpers.ValidateTitle(title)
+	title = helpers.ValidateTitle(title)
 
 	user, err := b.users.EnsureUser(ctx, tgID, username)
 	if err != nil {
@@ -100,6 +99,12 @@ func (b *Bot) HandleRemove(ctx context.Context, update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	tgID := update.Message.From.ID
 
+	args := update.Message.CommandArguments()
+	if args == "" {
+		b.SendText(chatID, "Использование: /remove <id>")
+		return
+	}
+
 	user, err := b.users.GetByTgID(ctx, tgID)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
@@ -108,12 +113,6 @@ func (b *Bot) HandleRemove(ctx context.Context, update tgbotapi.Update) {
 		}
 		log.Errorf("getting user by tg_id=%d: %v", tgID, err)
 		b.SendText(chatID, "Ошибка. Попробуйте позже")
-		return
-	}
-
-	args := update.Message.CommandArguments()
-	if args == "" {
-		b.SendText(chatID, "Использование: /remove <id>")
 		return
 	}
 
@@ -127,7 +126,7 @@ func (b *Bot) HandleRemove(ctx context.Context, update tgbotapi.Update) {
 	err = b.items.Remove(ctx, user.ID, id)
 	if err != nil {
 		if errors.Is(err, storage.ErrItemNotFound) {
-			b.SendText(chatID, "Вы еще не добавляли товар с таким url. /add <url> <price> [title]")
+			b.SendText(chatID, "Товар с таким ID не найден. /add <url> <price> [title]")
 			return
 		}
 		log.Errorf("remove item item_id=%d: %v", id, err)
@@ -145,7 +144,7 @@ func (b *Bot) HandleList(ctx context.Context, update tgbotapi.Update) {
 	user, err := b.users.GetByTgID(ctx, tgID)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			b.SendText(chatID, "Вы еще не зарегестрированы/ /add <url> <price> [title]")
+			b.SendText(chatID, "Вы еще не зарегистрированы/ /add <url> <price> [title]")
 			return
 		}
 		log.Errorf("handle list tg_id=%d: %v", tgID, err)
@@ -161,14 +160,14 @@ func (b *Bot) HandleList(ctx context.Context, update tgbotapi.Update) {
 	}
 
 	if len(items) == 0 {
-		b.SendText(chatID, "У вас еще нету товаров. /add <url> <price> []title")
+		b.SendText(chatID, "У вас еще нету товаров. /add <url> <price> [title]")
 		return
 	}
 
 	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("Список ваших товаров [%d]:\n\n", len(items)))
 	for _, item := range items {
-		sb.WriteString(stringhelpers.FormatItem(item))
+		sb.WriteString(helpers.FormatItem(item))
 		sb.WriteString("\n")
 	}
 
