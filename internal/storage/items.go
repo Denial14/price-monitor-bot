@@ -149,3 +149,40 @@ func (r *ItemRepo) GetByID(ctx context.Context, userID, itemID int64) (*models.I
 
 	return &it, nil
 }
+
+func (r *ItemRepo) All(ctx context.Context) ([]models.Item, error) {
+	query := `
+		SELECT id, user_id, url, title, target_price,
+            last_price, last_currency, last_checked_at, last_notified_at,
+            last_notified_price, created_at
+		FROM items 
+		ORDER BY last_checked_at ASC NULLS FIRST
+	`
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("All: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.Item, 0)
+	for rows.Next() {
+		var it models.Item
+		err := rows.Scan(
+			&it.ID, &it.UserID, &it.URL, &it.Title, &it.TargetPrice,
+			&it.LastPrice, &it.LastCurrency, &it.LastCheckedAt,
+			&it.LastNotifiedAt, &it.LastNotifiedPrice, &it.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan item: %w", err)
+		}
+		items = append(items, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows scan: %w", err)
+	}
+
+	return items, nil
+}

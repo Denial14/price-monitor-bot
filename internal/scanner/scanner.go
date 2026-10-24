@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"price-bot/internal/models"
 	"price-bot/internal/parser"
 	"price-bot/internal/storage"
 
 	"github.com/cenkalti/backoff/v4"
+	log "github.com/sirupsen/logrus"
 )
 
 type Result struct {
@@ -59,7 +61,7 @@ func (s *Scanner) ProcessItem(ctx context.Context, item models.Item) Result {
 		return Result{ItemID: item.ID, Error: fmt.Errorf("no parser for %s", item.URL)}
 	}
 
-	price, err := s.parseFn(ctx, p, item.URL) // ← используем parseFn
+	price, err := s.parseFn(ctx, p, item.URL)
 	if err != nil {
 		return Result{ItemID: item.ID, Error: err}
 	}
@@ -102,4 +104,37 @@ func (s *Scanner) CheckAll(ctx context.Context, items []models.Item) []Result {
 	}
 
 	return out
+}
+
+func (s *Scanner) RunOnce(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	items, err := s.items.All(ctx)
+	if err != nil {
+		log.Errorf("get all items: %v", err)
+		return
+	}
+
+	if len(items) == 0 {
+		log.Info("no items to check")
+		return
+	}
+
+	log.Infof("Scan started: %d items", len(items))
+	start := time.Now()
+
+	results := s.CheckAll(ctx, items)
+
+	ok, errCount := 0, 0
+	for _, r := range results {
+		if r.Error != nil {
+			log.Warnf("item %d: %v", r.ItemID, r.Error)
+			errCount++
+		} else {
+			ok++
+		}
+	}
+
+	log.Infof("scanner finished in %v: %d ok, %d error", time.Since(start), ok, errCount)
 }
