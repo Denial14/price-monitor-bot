@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"price-bot/internal/bot"
 	"price-bot/internal/config"
+	"price-bot/internal/parser"
 	"price-bot/internal/storage"
 	"syscall"
 
@@ -31,7 +32,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	b, err := bot.New(token, pool)
+	registry := parser.NewRegistry()
+	b, err := bot.New(cfg.BotToken, pool, registry)
 	if err != nil {
 		log.Errorf("bot: %v", err)
 	}

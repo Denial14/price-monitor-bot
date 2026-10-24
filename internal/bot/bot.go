@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"price-bot/internal/parser"
 	"price-bot/internal/storage"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -11,12 +12,13 @@ import (
 )
 
 type Bot struct {
-	api   *tgbotapi.BotAPI
-	users *storage.UserRepo
-	items *storage.ItemRepo
+	api      *tgbotapi.BotAPI
+	users    *storage.UserRepo
+	items    *storage.ItemRepo
+	registry *parser.Registry
 }
 
-func New(token string, pool *pgxpool.Pool) (*Bot, error) {
+func New(token string, pool *pgxpool.Pool, registry *parser.Registry) (*Bot, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, fmt.Errorf("error creating bot: %w", err)
@@ -24,9 +26,10 @@ func New(token string, pool *pgxpool.Pool) (*Bot, error) {
 	log.Infof("Authorized as @%s", bot.Self.UserName)
 
 	return &Bot{
-		api:   bot,
-		users: storage.NewUserRepo(pool),
-		items: storage.NewItemRepo(pool),
+		api:      bot,
+		users:    storage.NewUserRepo(pool),
+		items:    storage.NewItemRepo(pool),
+		registry: registry,
 	}, nil
 }
 
@@ -72,6 +75,8 @@ func (b *Bot) HandleUpdate(ctx context.Context, update tgbotapi.Update) {
 		b.HandleList(ctx, update)
 	case "stat":
 		b.HandleStat(ctx, update)
+	case "check":
+		b.HandleCheck(ctx, update)
 	default:
 		b.SendText(update.Message.Chat.ID, "Неизвестная команда. Попробуй /help")
 	}

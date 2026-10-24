@@ -7,6 +7,7 @@ import (
 	"price-bot/internal/models"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -122,4 +123,29 @@ func (r *ItemRepo) UpdatePrice(ctx context.Context, itemID int64, price float64,
 		return fmt.Errorf("update price id=%d: %w", itemID, err)
 	}
 	return nil
+}
+
+func (r *ItemRepo) GetByID(ctx context.Context, userID, itemID int64) (*models.Item, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT * FROM items WHERE id = $1 AND user_id = $2
+	`
+
+	var it models.Item
+	err := r.pool.QueryRow(ctx, query, itemID, userID).Scan(
+		&it.ID, &it.UserID, &it.URL, &it.Title, &it.TargetPrice,
+		&it.LastPrice, &it.LastCurrency, &it.LastCheckedAt,
+		&it.LastNotifiedAt, &it.LastNotifiedPrice, &it.CreatedAt,
+	)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrItemNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get item id=%d: %w", itemID, err)
+	}
+
+	return &it, nil
 }

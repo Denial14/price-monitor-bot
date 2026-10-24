@@ -36,6 +36,7 @@ func (b *Bot) HandleHelp(ctx context.Context, update tgbotapi.Update) {
 		/remove - удаление товара
 		/list - показать список товаров
 		/stat - показать статистику
+		/check - проверка цены
 	`
 	b.SendText(update.Message.Chat.ID, text)
 }
@@ -197,4 +198,64 @@ func (b *Bot) HandleStat(ctx context.Context, update tgbotapi.Update) {
 	}
 
 	b.SendText(chatID, fmt.Sprintf("Товаров: %d", count))
+}
+
+func (b *Bot) HandleCheck(ctx context.Context, update tgbotapi.Update) {
+	chatID := update.Message.Chat.ID
+	tgID := update.Message.From.ID
+
+	args := update.Message.CommandArguments()
+	if args == "" {
+		b.SendText(chatID, "Использование: /check <id>")
+		return
+	}
+
+	parts := strings.Fields(args)
+	idStr := parts[0]
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		b.SendText(chatID, "ID товара должен быть положительным")
+		return
+	}
+
+	user, err := b.users.GetByTgID(ctx, tgID)
+	if err != nil {
+		if errors.Is(err, storage.ErrUserNotFound) {
+			b.SendText(chatID, "Вы еще не добавляли товары")
+			return
+		}
+		b.SendText(chatID, "Ошибка. Попробуйте позже")
+		log.Errorf("get user bu tg_id=%d: %v", tgID, err)
+		return
+	}
+
+	item, err := b.items.GetByID(ctx, user.ID, id)
+	if err != nil {
+		if errors.Is(err, storage.ErrItemNotFound) {
+			b.SendText(chatID, "Вы не добавляли товар с таким ID")
+			return
+		}
+		b.SendText(chatID, "Ошибка. Попробуйте позже")
+		log.Errorf("get item by id=%d: %v", id, err)
+		return
+	}
+
+	p := b.registry.For(item.URL)
+	if p == nil {
+		b.SendText(chatID, "Нет парсера для этого сайта")
+		return
+	}
+
+	price, err := p.Parse(ctx, item.URL)
+	if err != nil {
+		b.SendText(chatID, "Не удалось получить цену")
+		log.Errorf("parse item_id=%d url=%s: %v", item.ID, item.URL, err)
+		return
+	}
+
+	if err := b.items.UpdatePrice(ctx, item.ID, price.Value, price.Currency); err != nil {
+		log.Errorf("update price item_id=%d: %v", item.ID, err)
+	}
+
+	b.SendText(chatID, fmt.Sprintf("[%d] %s\nТекущая цена: %.2f %s\nЦель: %.2f", item.ID, item.Title, price.Value, price.Currency, item.TargetPrice))
 }
