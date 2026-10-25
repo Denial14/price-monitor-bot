@@ -186,3 +186,43 @@ func (r *ItemRepo) All(ctx context.Context) ([]models.Item, error) {
 
 	return items, nil
 }
+
+func (r *ItemRepo) ItemsToNotify(ctx context.Context, limit int) ([]models.Item, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT id, user_id, url, title, target_price,
+            last_price, last_currency, last_checked_at, last_notified_at,
+            last_notified_price, created_at
+		FROM items
+		WHERE 
+			last_price IS NOT NULL
+			AND last_price < target_price
+			AND (last_notified_at IS NULL OR last_notified_price > last_price)
+		ORDER BY id
+		LIMIT $1
+	`
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("error getting items to notify: %v", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.Item, 0)
+	for rows.Next() {
+		var it models.Item
+		if err := rows.Scan(
+			&it.ID, &it.UserID, &it.URL, &it.Title, &it.TargetPrice,
+			&it.LastPrice, &it.LastCurrency, &it.LastCheckedAt,
+			&it.LastNotifiedAt, &it.LastNotifiedPrice, &it.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("ItemsToNotify: scan item: %w", err)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+}

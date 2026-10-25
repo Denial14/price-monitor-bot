@@ -55,3 +55,19 @@ func (r *UserRepo) GetByTgID(ctx context.Context, tgID int64) (*models.User, err
 	}
 	return &user, nil
 }
+
+func (r *UserRepo) GetByID(ctx context.Context, userID int64) (*models.User, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	query := `SELECT id, tg_id, username, created_at FROM users WHERE id = $1`
+	var user models.User
+	err := r.pool.QueryRow(ctx, query, userID).Scan(&user.ID, &user.TgID, &user.Username, &user.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get user by user_id=%d: %w", userID, err)
+	}
+	return &user, nil
+}
