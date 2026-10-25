@@ -33,7 +33,7 @@ func main() {
 	defer pool.Close()
 
 	registry := parser.NewRegistry()
-	b, err := bot.New(cfg.BotToken, pool, registry)
+	b, err := bot.New(cfg.BotToken, pool, registry, cfg.PollInterval)
 	if err != nil {
 		log.Errorf("bot: %v", err)
 	}

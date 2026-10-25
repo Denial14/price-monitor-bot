@@ -220,9 +220,28 @@ func (r *ItemRepo) ItemsToNotify(ctx context.Context, limit int) ([]models.Item,
 		); err != nil {
 			return nil, fmt.Errorf("ItemsToNotify: scan item: %w", err)
 		}
+		items = append(items, it)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
+
+	return items, nil
+}
+
+func (r *ItemRepo) MarkNotified(ctx context.Context, itemID int64, price float64) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	query := `
+		UPDATE items
+		SET last_notified_at = now(), last_notified_price = $1
+		WHERE id = $2
+	`
+	_, err := r.pool.Exec(ctx, query, price, itemID)
+	if err != nil {
+		return fmt.Errorf("mark notified item_id=%d: %w", itemID, err)
+	}
+	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"price-bot/internal/parser"
 	"price-bot/internal/storage"
+	"sync"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,24 +18,37 @@ type Bot struct {
 	users    *storage.UserRepo
 	items    *storage.ItemRepo
 	registry *parser.Registry
+	notifier *Notifier
 }
 
-func New(token string, pool *pgxpool.Pool, registry *parser.Registry) (*Bot, error) {
+func New(token string, pool *pgxpool.Pool, registry *parser.Registry, pollInterval time.Duration) (*Bot, error) {
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, fmt.Errorf("error creating bot: %w", err)
 	}
 	log.Infof("Authorized as @%s", bot.Self.UserName)
 
+	users := storage.NewUserRepo(pool)
+	items := storage.NewItemRepo(pool)
+	notifier := NewNotifier(bot, items, users, pollInterval)
+
 	return &Bot{
 		api:      bot,
-		users:    storage.NewUserRepo(pool),
-		items:    storage.NewItemRepo(pool),
+		users:    users,
+		items:    items,
 		registry: registry,
+		notifier: notifier,
 	}, nil
 }
 
 func (b *Bot) Run(ctx context.Context) error {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		b.notifier.Run(ctx)
+	}()
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
@@ -43,10 +58,11 @@ func (b *Bot) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Bot: shutting down")
+			log.Info("Bot: shutting down")
 			return nil
 		case update, ok := <-updates:
 			if !ok {
+				wg.Wait()
 				return nil
 			}
 			b.HandleUpdate(ctx, update)
